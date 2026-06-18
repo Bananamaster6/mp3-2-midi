@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Multi-Track Audio to MIDI</title>
+  <style>
+    :root{
+      color-scheme: dark;
+      --bg:#070910;
+      --panel:rgba(15,19,32,.9);
+      --panel2:rgba(20,26,43,.92);
+      --line:rgba(255,255,255,.08);
+      --text:#f3f7ff;
+      --muted:#9ea8c8;
+      --accent:#7d5cff;
+      --accent2:#29d2ac;
+      --accent3:#ffb84d;
+      --danger:#ff6a88;
+      --shadow:0 28px 90px rgba(0,0,0,.52);
+      --radius:22px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:
+        radial-gradient(1200px 700px at 15% -8%, rgba(125,92,255,.22), transparent 56%),
+        radial-gradient(900px 550px at 85% 0%, rgba(41,210,172,.16), transparent 52%),
+        linear-gradient(180deg,#04050a,#090c14 40%,#06070b);
+      color:var(--text);
+    }
+    .wrap{width:min(1220px,calc(100% - 28px));margin:0 auto;padding:22px 0 30px}
+    .top{display:grid;grid-template-columns:1.18fr .82fr;gap:18px;align-items:stretch}
+    .hero,.card{
+      background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
+      border:1px solid var(--line);
+      box-shadow:var(--shadow);
+      border-radius:var(--radius);
+      backdrop-filter:blur(14px);
+    }
+    .hero{padding:28px;position:relative;overflow:hidden}
+    .eyebrow{
+      text-transform:uppercase;
+      letter-spacing:.18em;
+      color:var(--accent2);
+      font-weight:800;
+      font-size:12px;
+    }
+    h1{
+      margin:10px 0 10px;
+      font-size:clamp(34px,4.2vw,62px);
+      line-height:.95;
+      letter-spacing:-.05em;
+    }
+    .sub{
+      margin:0;
+      max-width:68ch;
+      color:var(--muted);
+      line-height:1.6;
+      font-size:15px;
+    }
+    .hero-badges{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+    .pill{
+      padding:9px 12px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.04);
+      font-size:13px;
+      color:#e6ebff;
+    }
+    .side{display:grid;gap:14px}
+    .mini{padding:16px 18px}
+    .mini h3,.card h3{margin:0 0 8px;font-size:16px}
+    .mini p,.card p,.hint{margin:0;color:var(--muted);font-size:13px;line-height:1.55}
+    .grid{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;margin-top:18px}
+    .card{padding:18px}
+    .dropzone{
+      border:1.5px dashed rgba(255,255,255,.16);
+      border-radius:20px;
+      padding:22px;
+      background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.02));
+      min-height:252px;
+      display:flex;flex-direction:column;justify-content:center;gap:14px;
+      transition:.18s ease;
+    }
+    .dropzone.dragover{border-color:rgba(125,92,255,.9);background:rgba(125,92,255,.10);transform:translateY(-1px)}
+    .upload-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    .btn{
+      appearance:none;border:0;border-radius:14px;
+      padding:12px 16px;font-weight:800;cursor:pointer;color:white;
+      background:linear-gradient(135deg,var(--accent),#5b8cff);
+      box-shadow:0 14px 30px rgba(92,124,255,.26);
+      transition:.18s ease;
+    }
+    .btn:hover{transform:translateY(-1px)}
+    .btn.secondary{
+      background:rgba(255,255,255,.06);
+      border:1px solid var(--line);
+      box-shadow:none;
+      color:var(--text);
+    }
+    .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+    input[type=file]{display:none}
+    .fileline{
+      display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+      color:var(--muted);font-size:13px
+    }
+    .fileline strong{color:var(--text)}
+    .status{display:grid;gap:10px;margin-top:4px}
+    .bar{
+      width:100%;height:12px;border-radius:999px;overflow:hidden;
+      background:rgba(255,255,255,.08);border:1px solid var(--line)
+    }
+    .bar > div{
+      width:0%;height:100%;
+      background:linear-gradient(90deg,var(--accent),var(--accent2));
+      transition:width .15s linear
+    }
+    .statusline{color:var(--muted);font-size:13px}
+    .statusline b{color:var(--text)}
+    .notice{
+      border:1px solid rgba(255,184,77,.18);
+      background:rgba(255,184,77,.08);
+      color:#ffe8bb;
+      padding:12px 14px;
+      border-radius:16px;
+      font-size:13px;
+      line-height:1.5;
+    }
+    .notice.err{
+      border-color:rgba(255,106,136,.20);
+      background:rgba(255,106,136,.08);
+      color:#ffd0db;
+    }
+    .controls{display:grid;gap:14px}
+    .control{
+      padding:14px;border-radius:18px;
+      background:rgba(255,255,255,.035);
+      border:1px solid var(--line);
+    }
+    .control label{
+      display:flex;justify-content:space-between;gap:10px;
+      margin-bottom:8px;font-size:13px;color:#dfe6ff
+    }
+    .control output{color:var(--accent2);font-weight:800}
+    .control input[type=range]{width:100%}
+    .footer-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+    .tiny{font-size:12px;color:var(--muted)}
+    .result-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:18px;margin-top:18px}
+    .tablewrap{
+      max-height:446px;overflow:auto;
+      border-radius:18px;border:1px solid var(--line);
+      background:rgba(255,255,255,.03)
+    }
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:10px 12px;text-align:left;border-bottom:1px solid rgba(255,255,255,.06)}
+    th{
+      position:sticky;top:0;background:rgba(9,12,20,.96);
+      color:#dfe6ff;font-size:12px;text-transform:uppercase;letter-spacing:.08em
+    }
+    tr:hover td{background:rgba(255,255,255,.03)}
+    .canvasbox{
+      border:1px solid var(--line);border-radius:18px;overflow:hidden;
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02))
+    }
+    canvas{display:block;width:100%;height:446px}
+    .trackdot{display:inline-block;width:9px;height:9px;border-radius:999px;margin-right:8px;vertical-align:middle}
+    @media (max-width:980px){
+      .top,.grid,.result-grid{grid-template-columns:1fr}
+      .hero{padding:22px}
+      canvas{height:360px}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <section class="hero">
+        <div class="eyebrow">Audio to MIDI</div>
+        <h1>Convert MP3 to multi-track MIDI in the browser.</h1>
+        <p class="sub">A single-file, Vercel-friendly transcription page with a clean upload flow, auto tempo guess, note cleanup controls, multi-track MIDI export, and a piano-roll preview. It is built to work offline in the browser without a server.</p>
+        <div class="hero-badges">
+          <span class="pill">Single HTML file</span>
+          <span class="pill">Drag and drop</span>
+          <span class="pill">4 MIDI tracks</span>
+          <span class="pill">Download .mid</span>
+        </div>
+      </section>
+      <aside class="side">
+        <div class="card mini">
+          <h3>Best with</h3>
+          <p>Clean piano, guitar, bass, or melody-heavy songs. Dense full mixes are harder for any static-only browser transcriber.</p>
+        </div>
+        <div class="card mini">
+          <h3>Files supported</h3>
+          <p>MP3, WAV, OGG, FLAC, and M4A usually decode in modern browsers through the Web Audio API.</p>
+        </div>
+        <div class="card mini">
+          <h3>Export</h3>
+          <p>The MIDI file is built in the page with separate tracks for drums, bass, harmony, and melody.</p>
+        </div>
+      </aside>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h3>Upload audio</h3>
+        <p>Drop a file here or choose one manually.</p>
+        <div id="dropzone" class="dropzone" style="margin-top:14px;">
+          <div class="upload-row">
+            <button class="btn" id="chooseBtn">Choose audio</button>
+            <button class="btn secondary" id="demoBtn" title="Loads a tiny built-in melody if you do not have a file">Try demo mode</button>
+            <input id="fileInput" type="file" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a" />
+          </div>
+          <div class="fileline">
+            <span>Selected:</span> <strong id="fileName">None</strong>
+            <span id="fileMeta"></span>
+          </div>
+          <div class="status">
+            <div class="bar"><div id="progressFill"></div></div>
+            <div class="statusline" id="statusLine">Idle. Pick an audio file to start.</div>
+          </div>
+          <div class="notice" id="noticeBox">Tip: use a clean recording for the best note detection. The page resamples audio to 22050 Hz internally.</div>
+        </div>
+      </section>
+
+      <section class="card controls">
+        <div>
+          <h3>Conversion settings</h3>
+          <p>These control how aggressively notes are detected and cleaned.</p>
+        </div>
+
+        <div class="control">
+          <label><span>Sensitivity</span><output id="sensOut">0.60</output></label>
+          <input id="sens" type="range" min="0.15" max="0.95" step="0.01" value="0.60" />
+        </div>
+
+        <div class="control">
+          <label><span>Tempo guess</span><output id="tempoOut">120</output></label>
+          <input id="tempo" type="range" min="60" max="180" step="1" value="120" />
+        </div>
+
+        <div class="control">
+          <label><span>Quantize grid (beats)</span><output id="quantOut">0.25</output></label>
+          <input id="quant" type="range" min="0.0625" max="1" step="0.0625" value="0.25" />
+        </div>
+
+        <div class="control">
+          <label><span>Minimum note length (sec)</span><output id="minLenOut">0.08</output></label>
+          <input id="minLen" type="range" min="0.03" max="0.35" step="0.01" value="0.08" />
+        </div>
+
+        <div class="footer-actions">
+          <button class="btn" id="transcribeBtn" disabled>Transcribe</button>
+          <button class="btn secondary" id="downloadBtn" disabled>Download MIDI</button>
+          <button class="btn secondary" id="copyBtn" disabled>Copy notes JSON</button>
+        </div>
+
+        <div class="tiny" id="engineLine">Engine: waiting.</div>
+      </section>
+    </div>
+
+    <div class="result-grid">
+      <section class="card">
+        <h3>Detected notes</h3>
+        <p>Each row includes the track assigned by the browser transcriber.</p>
+        <div class="tablewrap" style="margin-top:14px;">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Track</th><th>Pitch</th><th>Start</th><th>End</th><th>Len</th><th>Vel</th></tr>
+            </thead>
+            <tbody id="notesBody">
+              <tr><td colspan="7" class="tiny">No notes yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Piano roll</h3>
+        <p>Preview of the multi-track MIDI generated by the page.</p>
+        <div class="canvasbox" style="margin-top:14px;">
+          <canvas id="roll" width="1200" height="446"></canvas>
+        </div>
+      </section>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const ui = {
+    dropzone: $("dropzone"),
+    chooseBtn: $("chooseBtn"),
+    demoBtn: $("demoBtn"),
+    fileInput: $("fileInput"),
+    fileName: $("fileName"),
+    fileMeta: $("fileMeta"),
+    statusLine: $("statusLine"),
+    progressFill: $("progressFill"),
+    transcribeBtn: $("transcribeBtn"),
+    downloadBtn: $("downloadBtn"),
+    copyBtn: $("copyBtn"),
+    notesBody: $("notesBody"),
+    roll: $("roll"),
+    noticeBox: $("noticeBox"),
+    engineLine: $("engineLine"),
+    sens: $("sens"),
+    quant: $("quant"),
+    minLen: $("minLen"),
+    tempo: $("tempo"),
+    sensOut: $("sensOut"),
+    quantOut: $("quantOut"),
+    minLenOut: $("minLenOut"),
+    tempoOut: $("tempoOut"),
+  };
+
+  const ctx = ui.roll.getContext("2d");
+  const state = {
+    file: null,
+    audioBuffer: null,
+    notes: [],
+    midiBytes: null,
+    busy: false,
+  };
+
+  const TRACKS = [
+    { id: "drums",   name: "Drums",   color: "#ffb84d", channel: 9,  program: 0,  gm: 36 },
+    { id: "bass",    name: "Bass",    color: "#29d2ac", channel: 1,  program: 33, gm: 33 },
+    { id: "harmony", name: "Harmony", color: "#7d5cff", channel: 2,  program: 0,  gm: 48 },
+    { id: "melody",  name: "Melody",  color: "#66b6ff", channel: 3,  program: 81, gm: 81 },
+  ];
+
+  const NOTE_MIN = 24;
+  const NOTE_MAX = 96;
+
+  function clamp(v, a, b){ return Math.min(b, Math.max(a, v)); }
+  function escapeHtml(s){ return String(s).replace(/[&<>\"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;" }[c])); }
+
+  function setProgress(v){
+    ui.progressFill.style.width = `${Math.max(0, Math.min(100, v))}%`;
+  }
+  function setStatus(msg, kind=""){
+    ui.statusLine.innerHTML = kind === "error"
+      ? `<b style="color:var(--danger)">Error:</b> ${escapeHtml(msg)}`
+      : msg;
+  }
+  function updateSliderLabels(){
+    ui.sensOut.textContent = (+ui.sens.value).toFixed(2);
+    ui.quantOut.textContent = (+ui.quant.value).toFixed(4).replace(/0+$/,"").replace(/\.$/,"");
+    ui.minLenOut.textContent = (+ui.minLen.value).toFixed(2);
+    ui.tempoOut.textContent = ui.tempo.value;
+  }
+  [ui.sens, ui.quant, ui.minLen, ui.tempo].forEach(el => el.addEventListener("input", updateSliderLabels));
+  updateSliderLabels();
+
+  ui.chooseBtn.onclick = () => ui.fileInput.click();
+  ui.fileInput.addEventListener("change", () => {
+    if (ui.fileInput.files && ui.fileInput.files[0]) loadFile(ui.fileInput.files[0]);
+  });
+
+  ui.demoBtn.onclick = async () => {
+    const ac = new AudioContext();
+    const sr = ac.sampleRate;
+    const seconds = 4.2;
+    const buffer = ac.createBuffer(1, Math.floor(sr * seconds), sr);
+    const data = buffer.getChannelData(0);
+    const seq = [261.63, 329.63, 392.00, 523.25];
+    let t = 0;
+    for (const hz of seq) {
+      const start = Math.floor(t * sr), end = Math.floor((t + 0.78) * sr);
+      for (let i = start; i < end; i++) {
+        const ph = (i - start) / sr;
+        data[i] += Math.sin(2 * Math.PI * hz * ph) * 0.35;
+      }
+      t += 0.9;
+    }
+    state.file = new File([new Blob([])], "demo.wav", { type: "audio/wav" });
+    state.audioBuffer = buffer;
+    ui.fileName.textContent = state.file.name;
+    ui.fileMeta.textContent = `• ${seconds.toFixed(1)}s demo`;
+    ui.transcribeBtn.disabled = false;
+    state.notes = [];
+    state.midiBytes = null;
+    renderNotes([]);
+    drawEmpty();
+    setStatus("Demo loaded. Press Transcribe.");
+  };
+
+  async function loadFile(file){
+    state.file = file;
+    state.audioBuffer = null;
+    state.notes = [];
+    state.midiBytes = null;
+    ui.fileName.textContent = file.name;
+    ui.fileMeta.textContent = `• ${(file.size / 1024 / 1024).toFixed(2)} MB`;
+    ui.transcribeBtn.disabled = false;
+    ui.downloadBtn.disabled = true;
+    ui.copyBtn.disabled = true;
+    setProgress(0);
+    drawEmpty();
+    setStatus("File loaded. Ready to transcribe.");
+  }
+
+  async function decodeAudioFile(file){
+    const ac = new AudioContext();
+    const ab = await file.arrayBuffer();
+    return await ac.decodeAudioData(ab.slice(0));
+  }
+
+  ui.transcribeBtn.onclick = async () => {
+    if (state.busy || !state.file) return;
+    state.busy = true;
+    ui.transcribeBtn.disabled = true;
+    ui.downloadBtn.disabled = true;
+    ui.copyBtn.disabled = true;
+    setProgress(2);
+    setStatus("Preparing audio...");
+
+    try {
+      if (!state.audioBuffer) state.audioBuffer = await decodeAudioFile(state.file);
+      setProgress(10);
+
+      const audio = resampleMono(state.audioBuffer, 22050);
+      setProgress(18);
+      setStatus("Analyzing pitch and onsets...");
+
+      const analysis = analyzeAudio(audio, 22050, {
+        sensitivity: +ui.sens.value,
+        minLen: +ui.minLen.value,
+        tempoHint: +ui.tempo.value,
+      });
+
+      setProgress(76);
+      setStatus("Building multi-track MIDI...");
+
+      state.notes = cleanAndAssignNotes(analysis.notes, +ui.quant.value, +ui.minLen.value, analysis.tempo);
+      state.midiBytes = buildMidi(state.notes, analysis.tempo);
+      renderNotes(state.notes);
+      drawRoll(state.notes);
+      ui.downloadBtn.disabled = !state.notes.length;
+      ui.copyBtn.disabled = !state.notes.length;
+      ui.tempo.value = String(analysis.tempo);
+      updateSliderLabels();
+      setProgress(100);
+      setStatus(`Done. ${state.notes.length} notes across 4 tracks. Estimated tempo: ${analysis.tempo} BPM.`);
+      ui.engineLine.textContent = "Engine: offline browser transcriber (heuristic multi-track mode).";
+    } catch (err) {
+      console.error(err);
+      setProgress(0);
+      setStatus(err && err.message ? err.message : "Transcription failed.", "error");
+      ui.noticeBox.className = "notice err";
+      ui.noticeBox.textContent = "The file may not be supported by the browser or the audio may be too dense. Clean single-instrument audio works best in static HTML.";
+    } finally {
+      state.busy = false;
+      ui.transcribeBtn.disabled = !state.file;
+    }
+  };
+
+  function analyzeAudio(audio, sr, settings){
+    const frameSize = 2048;
+    const hop = 256;
+    const minHz = 55;
+    const maxHz = 1760;
+    const minLag = Math.floor(sr / maxHz);
+    const maxLag = Math.floor(sr / minHz);
+
+    const frames = [];
+    const window = hann(frameSize);
+    let prevRms = 0;
+    let prevCentroid = 0;
+    let prevPitch = null;
+
+    for (let pos = 0, idx = 0; pos + frameSize < audio.length; pos += hop, idx++) {
+      const frame = audio.subarray(pos, pos + frameSize);
+      const win = new Float32Array(frameSize);
+      for (let i = 0; i < frameSize; i++) win[i] = frame[i] * window[i];
+
+      const rms = calcRms(win);
+      const diff = Math.max(0, rms - prevRms * 0.94);
+      const flux = spectralFlux(frame, audio, pos, hop, frameSize);
+      const centroid = calcCentroid(win, sr);
+      const pitchInfo = detectPitch(win, sr, minLag, maxLag);
+
+      const onset = diff * 0.8 + flux * 0.55 + Math.max(0, Math.abs(centroid - prevCentroid) / 900);
+      const stable = pitchInfo && pitchInfo.confidence > (0.12 + (1 - settings.sensitivity) * 0.25);
+
+      frames.push({
+        time: pos / sr,
+        rms,
+        onset,
+        centroid,
+        pitch: pitchInfo ? pitchInfo.midi : null,
+        freq: pitchInfo ? pitchInfo.freq : null,
+        conf: pitchInfo ? pitchInfo.confidence : 0,
+        stable,
+      });
+
+      prevRms = rms;
+      prevCentroid = centroid;
+      if (pitchInfo) prevPitch = pitchInfo.midi;
+    }
+
+    const onsetTimes = frames.filter(f => f.onset > onsetThreshold(settings.sensitivity)).map(f => f.time);
+    const tempo = estimateTempo(onsetTimes, settings.tempoHint);
+    const notes = framesToNotes(frames, settings, tempo);
+    return { notes, tempo };
+  }
+
+  function hann(n){
+    const w = new Float32Array(n);
+    for (let i = 0; i < n; i++) w[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (n - 1)));
+    return w;
+  }
+
+  function calcRms(a){
+    let s = 0;
+    for (let i = 0; i < a.length; i++) s += a[i] * a[i];
+    return Math.sqrt(s / a.length);
+  }
+
+  function calcCentroid(a, sr){
+    let sumMag = 0, weighted = 0;
+    // Very light centroid proxy using zero-crossing + absolute slope, no full FFT.
+    let zc = 0;
+    for (let i = 1; i < a.length; i++) {
+      const v = Math.abs(a[i] - a[i - 1]);
+      weighted += v * (i / a.length);
+      sumMag += v;
+      if ((a[i - 1] >= 0) !== (a[i] >= 0)) zc++;
+    }
+    const zcr = zc / a.length;
+    return (weighted / Math.max(1e-9, sumMag)) * sr * 0.5 + zcr * sr * 0.25;
+  }
+
+  function spectralFlux(frame, audio, pos, hop, frameSize){
+    let sum = 0;
+    const prevStart = Math.max(0, pos - hop);
+    for (let i = 0; i < frameSize; i += 4) {
+      const a = frame[i] || 0;
+      const b = audio[prevStart + i] || 0;
+      sum += Math.abs(a - b);
+    }
+    return sum / (frameSize / 4);
+  }
+
+  function detectPitch(frame, sr, minLag, maxLag){
+    const energy = calcRms(frame);
+    if (energy < 0.004) return null;
+
+    let bestLag = -1;
+    let best = 0;
+    let second = 0;
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      let corr = 0;
+      for (let i = 0; i < frame.length - lag; i++) corr += frame[i] * frame[i + lag];
+      if (corr > best) {
+        second = best;
+        best = corr;
+        bestLag = lag;
+      } else if (corr > second) {
+        second = corr;
+      }
+    }
+    if (bestLag < 0) return null;
+    const freq = sr / bestLag;
+    const confidence = best / Math.max(1e-9, best + second + energy * frame.length);
+    if (!isFinite(freq) || freq < 40 || freq > 2000) return null;
+    if (confidence < 0.08) return null;
+    return { freq, midi: hzToMidi(freq), confidence };
+  }
+
+  function hzToMidi(hz){ return Math.round(69 + 12 * Math.log2(hz / 440)); }
+
+  function onsetThreshold(sens){
+    return 0.03 + (1 - sens) * 0.06;
+  }
+
+  function estimateTempo(onsetTimes, hint){
+    if (onsetTimes.length < 3) return hint || 120;
+    const bins = new Map();
+    for (let i = 0; i < onsetTimes.length - 1; i++) {
+      const d = onsetTimes[i + 1] - onsetTimes[i];
+      if (d < 0.24 || d > 1.5) continue;
+      const bpm = 60 / d;
+      for (const mult of [0.5, 1, 2]) {
+        const b = Math.round(clamp(bpm * mult, 60, 180));
+        bins.set(b, (bins.get(b) || 0) + 1);
+      }
+    }
+    if (!bins.size) return hint || 120;
+    let best = hint || 120, bestScore = -1;
+    for (const [bpm, score] of bins.entries()) {
+      const bias = 1 / (1 + Math.abs(bpm - hint) / 18);
+      const total = score + bias;
+      if (total > bestScore) { bestScore = total; best = bpm; }
+    }
+    return best;
+  }
+
+  function framesToNotes(frames, settings, tempo){
+    const notes = [];
+    let active = null;
+    let lastPitch = null;
+    let lastTrack = null;
+    let i = 0;
+
+    while (i < frames.length) {
+      const f = frames[i];
+      const next = frames[i + 1] || f;
+      const strong = f.onset > onsetThreshold(settings.sensitivity);
+      const pitchValid = f.pitch !== null && f.conf > (0.08 + (1 - settings.sensitivity) * 0.18);
+
+      // Drum hit from strong transient without stable pitch.
+      if (strong && (!pitchValid || f.conf < 0.12)) {
+        const drumNote = drumFromCentroid(f.centroid, f.onset);
+        notes.push({
+          track: "drums",
+          pitch: drumNote,
+          start: f.time,
+          end: f.time + Math.max(0.06, settings.minLen * 0.8),
+          velocity: clamp(Math.round(60 + f.onset * 220), 30, 127)
+        });
+        i += 1;
+        continue;
+      }
+
+      if (pitchValid) {
+        const pitch = f.pitch;
+        const track = trackFromPitch(pitch);
+        const changed = !active || Math.abs(pitch - lastPitch) > 1 || track !== lastTrack || strong;
+
+        if (changed) {
+          if (active) active.end = f.time;
+          active = {
+            track,
+            pitch,
+            start: f.time,
+            end: f.time + 0.12,
+            velocity: clamp(Math.round(48 + f.onset * 180 + f.conf * 60), 18, 127)
+          };
+          notes.push(active);
+        } else {
+          active.end = f.time + 0.12;
+          active.velocity = Math.max(active.velocity, clamp(Math.round(48 + f.onset * 180 + f.conf * 60), 18, 127));
+        }
+        lastPitch = pitch;
+        lastTrack = track;
+      } else {
+        if (active) active = null;
+      }
+
+      i += 1;
+    }
+
+    // Merge adjacent notes with same pitch/track.
+    const merged = [];
+    for (const n of notes) {
+      const prev = merged[merged.length - 1];
+      if (prev && prev.track === n.track && prev.pitch === n.pitch && n.start - prev.end <= 0.04) {
+        prev.end = Math.max(prev.end, n.end);
+        prev.velocity = Math.max(prev.velocity, n.velocity);
+      } else {
+        merged.push({ ...n });
+      }
+    }
+    return merged.filter(n => n.end - n.start >= settings.minLen * 0.65);
+  }
+
+  function trackFromPitch(p){
+    if (p <= 48) return "bass";
+    if (p >= 68) return "melody";
+    return "harmony";
+  }
+
+  function drumFromCentroid(c, onset){
+    if (c < 800) return 36;
+    if (c < 2200) return 38;
+    return 42;
+  }
+
+  function cleanAndAssignNotes(notes, quant, minLen, tempo){
+    const beat = 60 / tempo;
+    return notes.map(n => {
+      const q = quant * beat;
+      let start = Math.max(0, Math.round(n.start / q) * q);
+      let end = Math.max(0, Math.round(n.end / q) * q);
+      if (!isFinite(start) || !isFinite(end)) { start = n.start; end = n.end; }
+      if (end <= start) end = start + minLen;
+      if (end - start < minLen) end = start + minLen;
+      return {
+        track: n.track,
+        pitch: clamp(Math.round(n.pitch), 0, 127),
+        start,
+        end,
+        velocity: clamp(Math.round(n.velocity || 96), 1, 127),
+      };
+    }).filter(n => n.end > n.start && (n.track !== "drums" ? n.pitch >= NOTE_MIN && n.pitch <= NOTE_MAX : true));
+  }
+
+  function resampleMono(audioBuffer, targetRate){
+    const src = audioBuffer.numberOfChannels === 1 ? audioBuffer.getChannelData(0) : mixDown(audioBuffer);
+    const ratio = targetRate / audioBuffer.sampleRate;
+    const outLength = Math.max(1, Math.round(src.length * ratio));
+    const out = new Float32Array(outLength);
+    for (let i = 0; i < outLength; i++) {
+      const x = i / ratio;
+      const x0 = Math.floor(x);
+      const x1 = Math.min(src.length - 1, x0 + 1);
+      const t = x - x0;
+      out[i] = src[x0] * (1 - t) + src[x1] * t;
+    }
+    return out;
+  }
+
+  function mixDown(audioBuffer){
+    const len = audioBuffer.length;
+    const ch = audioBuffer.numberOfChannels;
+    const out = new Float32Array(len);
+    for (let c = 0; c < ch; c++) {
+      const data = audioBuffer.getChannelData(c);
+      for (let i = 0; i < len; i++) out[i] += data[i] / ch;
+    }
+    return out;
+  }
+
+  function buildMidi(notes, tempo){
+    const ticksPerBeat = 480;
+    const microPerBeat = Math.round(60000000 / tempo);
+    const trackMap = { drums: [], bass: [], harmony: [], melody: [] };
+    for (const n of notes) trackMap[n.track].push(n);
+
+    const chunks = [];
+    chunks.push(buildTrack([
+      ev(0, [0xff, 0x51, 0x03, (microPerBeat >> 16) & 255, (microPerBeat >> 8) & 255, microPerBeat & 255]),
+      ev(0, [0xff, 0x58, 0x04, 4, 2, 24, 8]),
+      ev(0, [0xff, 0x59, 0x02, 0, 0]),
+      ev(0, [0xff, 0x03, ...utf8("Multi-track Audio to MIDI")]),
+      ev(0, [0xff, 0x2f, 0x00]),
+    ]));
+
+    for (const tr of TRACKS) {
+      const events = [ev(0, [0xff, 0x03, ...utf8(tr.name)])];
+      if (tr.track !== "drums") events.push(ev(0, [0xc0 | tr.channel, tr.program]));
+      const sorted = [...trackMap[tr.id]].sort((a,b) => a.start - b.start || a.pitch - b.pitch);
+      for (const n of sorted) {
+        const note = tr.track === "drums" ? n.gm || n.pitch : n.pitch;
+        events.push(ev(secToTicks(n.start, tempo, ticksPerBeat), [0x90 | tr.channel, note & 127, n.velocity & 127]));
+        events.push(ev(secToTicks(n.end, tempo, ticksPerBeat), [0x80 | tr.channel, note & 127, 0]));
+      }
+      events.push(ev(sorted.length ? secToTicks(sorted[sorted.length - 1].end, tempo, ticksPerBeat) : 0, [0xff, 0x2f, 0x00]));
+      chunks.push(buildTrack(events));
+    }
+
+    const header = [];
+    pushStr(header, "MThd");
+    push32(header, 6);
+    push16(header, 1);
+    push16(header, TRACKS.length + 1);
+    push16(header, ticksPerBeat);
+    return new Uint8Array(header.concat(...chunks));
+  }
+
+  function ev(t, bytes){
+    return { t, bytes };
+  }
+
+  function buildTrack(events){
+    const sorted = [...events].sort((a, b) => a.t - b.t || rankEvent(a.bytes) - rankEvent(b.bytes));
+    const body = [];
+    let lastT = 0;
+    for (const e of sorted) {
+      body.push(...varLen(Math.max(0, e.t - lastT)), ...e.bytes);
+      lastT = e.t;
+    }
+    const out = [];
+    pushStr(out, "MTrk");
+    push32(out, body.length);
+    return out.concat(body);
+  }
+
+  function rankEvent(bytes){
+    const status = bytes[0];
+    if (status === 0xff && bytes[1] === 0x2f) return 3;
+    const hi = status & 0xF0;
+    if (hi === 0x80) return 0;
+    if (hi === 0x90) return 1;
+    if (hi === 0xC0) return 2;
+    return 4;
+  }
+
+  function utf8(txt){
+    return Array.from(new TextEncoder().encode(txt));
+  }
+
+  function secToTicks(sec, tempo, tpb){ return Math.max(0, Math.round(sec * tempo / 60 * tpb)); }
+
+  function renderNotes(notes){
+    if (!notes.length) {
+      ui.notesBody.innerHTML = `<tr><td colspan="7" class="tiny">No notes found.</td></tr>`;
+      return;
+    }
+    const rows = notes.map((n, i) => {
+      const tr = TRACKS.find(t => t.id === n.track);
+      return `<tr>
+        <td>${i + 1}</td>
+        <td><span class="trackdot" style="background:${tr.color}"></span>${tr.name}</td>
+        <td>${n.pitch}</td>
+        <td>${n.start.toFixed(3)}</td>
+        <td>${n.end.toFixed(3)}</td>
+        <td>${(n.end - n.start).toFixed(3)}</td>
+        <td>${Math.round(n.velocity)}</td>
+      </tr>`;
+    }).join("");
+    ui.notesBody.innerHTML = rows;
+  }
+
+  function drawEmpty(){
+    ctx.clearRect(0,0,ui.roll.width,ui.roll.height);
+    ctx.fillStyle = "rgba(255,255,255,.04)";
+    ctx.fillRect(0,0,ui.roll.width,ui.roll.height);
+    ctx.strokeStyle = "rgba(255,255,255,.05)";
+    for (let p = NOTE_MIN; p <= NOTE_MAX; p++) {
+      const y = pitchToY(p);
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(ui.roll.width, y);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(255,255,255,.24)";
+    ctx.font = "600 18px Inter, sans-serif";
+    ctx.fillText("Your MIDI preview will appear here.", 28, 40);
+  }
+
+  function pitchToY(p){
+    const h = ui.roll.height - 30;
+    return 15 + (NOTE_MAX - p) * (h / (NOTE_MAX - NOTE_MIN));
+  }
+
+  function drawRoll(notes){
+    drawEmpty();
+    if (!notes.length) return;
+    const w = ui.roll.width - 40;
+    const h = ui.roll.height - 30;
+    const maxT = Math.max(...notes.map(n => n.end), 0.001);
+    ctx.save();
+    ctx.translate(20, 15);
+    ctx.fillStyle = "rgba(255,255,255,.04)";
+    ctx.fillRect(0,0,w,h);
+
+    for (let i = 0; i <= 8; i++) {
+      const x = (w / 8) * i;
+      ctx.strokeStyle = "rgba(255,255,255,.05)";
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+    }
+
+    for (let p = NOTE_MIN; p <= NOTE_MAX; p++) {
+      const y = (NOTE_MAX - p) * (h / (NOTE_MAX - NOTE_MIN));
+      ctx.strokeStyle = p % 12 === 0 ? "rgba(255,255,255,.12)" : "rgba(255,255,255,.05)";
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
+
+    notes.forEach((n) => {
+      const tr = TRACKS.find(t => t.id === n.track);
+      const x = (n.start / maxT) * w;
+      const y = ((NOTE_MAX - n.pitch) / (NOTE_MAX - NOTE_MIN)) * h;
+      const bw = Math.max(5, ((n.end - n.start) / maxT) * w);
+      const bh = Math.max(8, h / (NOTE_MAX - NOTE_MIN) * 0.78);
+      const grad = ctx.createLinearGradient(x, y, x + bw, y + bh);
+      grad.addColorStop(0, tr.color);
+      grad.addColorStop(1, "rgba(255,255,255,.72)");
+      ctx.fillStyle = grad;
+      roundRect(ctx, x, y, bw, bh, 6);
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  function roundRect(c, x, y, w, h, r){
+    const rr = Math.min(r, w/2, h/2);
+    c.beginPath();
+    c.moveTo(x + rr, y);
+    c.arcTo(x + w, y, x + w, y + h, rr);
+    c.arcTo(x + w, y + h, x, y + h, rr);
+    c.arcTo(x, y + h, x, y, rr);
+    c.arcTo(x, y, x + w, y, rr);
+    c.closePath();
+  }
+
+  ui.downloadBtn.onclick = () => {
+    if (!state.midiBytes) return;
+    const blob = new Blob([state.midiBytes], { type: "audio/midi" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = (state.file?.name || "transcription").replace(/\.[^.]+$/, "") + ".mid";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1200);
+  };
+
+  ui.copyBtn.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(state.notes, null, 2));
+      setStatus("Notes JSON copied to clipboard.");
+    } catch {
+      setStatus("Clipboard access was blocked by the browser.", "error");
+    }
+  };
+
+  ["dragenter","dragover"].forEach(ev => {
+    ui.dropzone.addEventListener(ev, e => { e.preventDefault(); ui.dropzone.classList.add("dragover"); });
+  });
+  ["dragleave","drop"].forEach(ev => {
+    ui.dropzone.addEventListener(ev, e => { e.preventDefault(); ui.dropzone.classList.remove("dragover"); });
+  });
+  ui.dropzone.addEventListener("drop", e => {
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) loadFile(file);
+  });
+
+  drawEmpty();
+  setStatus("Idle. Pick an audio file to start.");
+})();
+</script>
+</body>
+</html>
