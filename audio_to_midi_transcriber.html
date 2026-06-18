@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Audio to MIDI Transcriber</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07090f;
+      --panel: rgba(16, 20, 33, 0.88);
+      --panel2: rgba(22, 28, 46, 0.92);
+      --line: rgba(255,255,255,.08);
+      --text: #f4f7ff;
+      --muted: #9ea8c7;
+      --accent: #7c5cff;
+      --accent2: #31d0aa;
+      --warn: #ffca6a;
+      --danger: #ff6b8b;
+      --shadow: 0 28px 90px rgba(0,0,0,.5);
+      --radius: 22px;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(1200px 700px at 20% -10%, rgba(124,92,255,.24), transparent 60%),
+        radial-gradient(900px 500px at 85% 0%, rgba(49,208,170,.18), transparent 55%),
+        linear-gradient(180deg, #04050a, #090c14 42%, #06070b);
+      color: var(--text);
+    }
+    .wrap {
+      width: min(1200px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 22px 0 30px;
+    }
+    .top {
+      display: grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+    .hero, .card {
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+    }
+    .hero { padding: 28px; overflow: hidden; position: relative; }
+    .eyebrow { color: var(--accent2); letter-spacing: .18em; text-transform: uppercase; font-weight: 700; font-size: 12px; }
+    h1 {
+      margin: 10px 0 10px;
+      font-size: clamp(34px, 4vw, 58px);
+      line-height: .96;
+      letter-spacing: -.04em;
+    }
+    .sub { color: var(--muted); max-width: 62ch; font-size: 15px; line-height: 1.6; }
+    .hero-badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+    .pill {
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,.04);
+      color: #dfe6ff;
+      font-size: 13px;
+    }
+    .side {
+      display: grid;
+      gap: 14px;
+    }
+    .mini {
+      padding: 16px 18px;
+    }
+    .mini h3, .card h3 { margin: 0 0 8px; font-size: 16px; }
+    .mini p, .card p, .hint { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap: 18px;
+      margin-top: 18px;
+    }
+    .card { padding: 18px; }
+    .dropzone {
+      border: 1.5px dashed rgba(255,255,255,.16);
+      border-radius: 20px;
+      padding: 22px;
+      background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.02));
+      transition: .18s ease;
+      min-height: 248px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 14px;
+    }
+    .dropzone.dragover { border-color: rgba(124,92,255,.9); background: rgba(124,92,255,.11); transform: translateY(-1px); }
+    .upload-row { display:flex; gap:12px; flex-wrap: wrap; align-items:center; }
+    .btn {
+      appearance: none;
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-weight: 700;
+      cursor: pointer;
+      color: white;
+      background: linear-gradient(135deg, var(--accent), #5b8cff);
+      box-shadow: 0 14px 30px rgba(92,124,255,.26);
+      transition: .18s ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn.secondary {
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--line);
+      box-shadow: none;
+      color: var(--text);
+    }
+    .btn:disabled { opacity: .5; cursor:not-allowed; transform:none; }
+    input[type="file"] { display:none; }
+    .fileline {
+      display:flex; gap:10px; align-items:center; flex-wrap: wrap;
+      color: var(--muted); font-size: 13px;
+    }
+    .fileline strong { color: var(--text); }
+    .controls {
+      display:grid;
+      gap: 14px;
+    }
+    .control {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.035);
+      border: 1px solid var(--line);
+    }
+    .control label { display:flex; justify-content:space-between; gap:10px; margin-bottom: 8px; font-size: 13px; color:#dfe6ff; }
+    .control output { color: var(--accent2); font-weight: 700; }
+    .control input[type="range"] { width: 100%; }
+    .status {
+      margin-top: 14px;
+      display:grid;
+      gap: 10px;
+    }
+    .bar {
+      width: 100%; height: 12px; overflow: hidden; border-radius: 999px;
+      background: rgba(255,255,255,.08); border: 1px solid var(--line);
+    }
+    .bar > div {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: inherit;
+      transition: width .15s linear;
+    }
+    .statusline { color: var(--muted); font-size: 13px; }
+    .statusline b { color: var(--text); }
+    .result-grid {
+      display:grid;
+      grid-template-columns: .9fr 1.1fr;
+      gap: 18px;
+      margin-top: 18px;
+    }
+    .tablewrap {
+      max-height: 440px;
+      overflow:auto;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.03);
+    }
+    table { width:100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 10px 12px; text-align:left; border-bottom: 1px solid rgba(255,255,255,.06); }
+    th { position: sticky; top: 0; background: rgba(9,12,20,.96); color: #dfe6ff; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    tr:hover td { background: rgba(255,255,255,.03); }
+    .canvasbox {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+    }
+    canvas { display:block; width:100%; height: 440px; }
+    .footer-actions { display:flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .notice {
+      border: 1px solid rgba(255,202,106,.22);
+      background: rgba(255,202,106,.08);
+      color: #ffe6b1;
+      padding: 12px 14px;
+      border-radius: 16px;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .err { border-color: rgba(255,107,139,.22); background: rgba(255,107,139,.08); color: #ffd0da; }
+    .muted-small { font-size: 12px; color: var(--muted); }
+    .tiny { font-size: 12px; color: var(--muted); }
+    @media (max-width: 980px) {
+      .top, .grid, .result-grid { grid-template-columns: 1fr; }
+      .hero { padding: 22px; }
+      canvas { height: 360px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <section class="hero">
+        <div class="eyebrow">Audio to MIDI</div>
+        <h1>Drop an MP3 and get MIDI back.</h1>
+        <p class="sub">A single-file Vercel-friendly transcription page with a Songscription-style flow: upload, transcribe, preview, and download. It uses a browser-side transcription attempt first, then builds a MIDI file right in the page.</p>
+        <div class="hero-badges">
+          <span class="pill">Single HTML file</span>
+          <span class="pill">Drag and drop</span>
+          <span class="pill">Progress + preview</span>
+          <span class="pill">MIDI download</span>
+        </div>
+      </section>
+      <aside class="side">
+        <div class="card mini">
+          <h3>Works best with</h3>
+          <p>Single-instrument audio, especially piano, guitar, bass, voice, or isolated stems.</p>
+        </div>
+        <div class="card mini">
+          <h3>Files supported</h3>
+          <p>MP3, OGG, WAV, and FLAC are the safest choices in the browser.</p>
+        </div>
+        <div class="card mini">
+          <h3>Important</h3>
+          <p>This is a front-end build. For multi-instrument cloud-grade separation like Songscription, you would normally add a backend later.</p>
+        </div>
+      </aside>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h3>Upload audio</h3>
+        <p>Drop a file here or choose one manually.</p>
+        <div id="dropzone" class="dropzone" style="margin-top:14px;">
+          <div class="upload-row">
+            <button class="btn" id="chooseBtn">Choose audio</button>
+            <button class="btn secondary" id="demoBtn" title="Loads a tiny built-in test melody if you do not have a file">Try demo mode</button>
+            <input id="fileInput" type="file" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a" />
+          </div>
+          <div class="fileline">
+            <span>Selected:</span> <strong id="fileName">None</strong>
+            <span id="fileMeta"></span>
+          </div>
+          <div class="status">
+            <div class="bar"><div id="progressFill"></div></div>
+            <div class="statusline" id="statusLine">Idle. Pick an audio file to start.</div>
+          </div>
+          <div class="notice" id="noticeBox">
+            Tip: for best results, use a clean single-instrument recording. The page resamples and down-mixes internally.
+          </div>
+        </div>
+      </section>
+
+      <section class="card controls">
+        <div>
+          <h3>Conversion settings</h3>
+          <p>These control how aggressively notes are cleaned up after detection.</p>
+        </div>
+        <div class="control">
+          <label><span>Sensitivity</span><output id="sensOut">0.55</output></label>
+          <input id="sens" type="range" min="0.15" max="0.95" step="0.01" value="0.55" />
+        </div>
+        <div class="control">
+          <label><span>Quantize grid (beats)</span><output id="quantOut">0.25</output></label>
+          <input id="quant" type="range" min="0.0625" max="1" step="0.0625" value="0.25" />
+        </div>
+        <div class="control">
+          <label><span>Minimum note length (sec)</span><output id="minLenOut">0.08</output></label>
+          <input id="minLen" type="range" min="0.03" max="0.35" step="0.01" value="0.08" />
+        </div>
+        <div class="control">
+          <label><span>Tempo guess</span><output id="tempoOut">120</output></label>
+          <input id="tempo" type="range" min="60" max="180" step="1" value="120" />
+        </div>
+        <div class="footer-actions">
+          <button class="btn" id="transcribeBtn" disabled>Transcribe</button>
+          <button class="btn secondary" id="downloadBtn" disabled>Download MIDI</button>
+          <button class="btn secondary" id="copyBtn" disabled>Copy notes JSON</button>
+        </div>
+        <div class="tiny" id="engineLine">Engine: not loaded yet.</div>
+      </section>
+    </div>
+
+    <div class="result-grid">
+      <section class="card">
+        <h3>Detected notes</h3>
+        <p>Scroll through the note list after conversion.</p>
+        <div class="tablewrap" style="margin-top:14px;">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Pitch</th><th>Start</th><th>End</th><th>Len</th><th>Vel</th></tr>
+            </thead>
+            <tbody id="notesBody">
+              <tr><td colspan="6" class="muted-small">No notes yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Piano roll</h3>
+        <p>Preview of the MIDI generated by the page.</p>
+        <div class="canvasbox" style="margin-top:14px;">
+          <canvas id="roll" width="1200" height="440"></canvas>
+        </div>
+      </section>
+    </div>
+  </div>
+
+<script type="module">
+  const $ = (id) => document.getElementById(id);
+  const state = {
+    file: null,
+    audioBuffer: null,
+    notes: [],
+    midiBytes: null,
+    engineReady: false,
+    busy: false,
+    modelError: null,
+  };
+
+  const ui = {
+    dropzone: $("dropzone"),
+    chooseBtn: $("chooseBtn"),
+    demoBtn: $("demoBtn"),
+    fileInput: $("fileInput"),
+    fileName: $("fileName"),
+    fileMeta: $("fileMeta"),
+    statusLine: $("statusLine"),
+    progressFill: $("progressFill"),
+    transcribeBtn: $("transcribeBtn"),
+    downloadBtn: $("downloadBtn"),
+    copyBtn: $("copyBtn"),
+    notesBody: $("notesBody"),
+    roll: $("roll"),
+    noticeBox: $("noticeBox"),
+    engineLine: $("engineLine"),
+    sens: $("sens"),
+    quant: $("quant"),
+    minLen: $("minLen"),
+    tempo: $("tempo"),
+    sensOut: $("sensOut"),
+    quantOut: $("quantOut"),
+    minLenOut: $("minLenOut"),
+    tempoOut: $("tempoOut"),
+  };
+
+  const ctx = ui.roll.getContext("2d");
+  const NOTE_MIN = 36;
+  const NOTE_MAX = 96;
+
+  function setProgress(v) {
+    ui.progressFill.style.width = `${Math.max(0, Math.min(100, v))}%`;
+  }
+
+  function setStatus(msg, kind = "") {
+    ui.statusLine.innerHTML = kind === "error" ? `<b style="color:var(--danger)">Error:</b> ${escapeHtml(msg)}` : msg;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+  }
+
+  function updateSliderLabels() {
+    ui.sensOut.textContent = (+ui.sens.value).toFixed(2);
+    ui.quantOut.textContent = (+ui.quant.value).toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+    ui.minLenOut.textContent = (+ui.minLen.value).toFixed(2);
+    ui.tempoOut.textContent = ui.tempo.value;
+  }
+
+  [ui.sens, ui.quant, ui.minLen, ui.tempo].forEach(el => el.addEventListener("input", updateSliderLabels));
+  updateSliderLabels();
+
+  ui.chooseBtn.onclick = () => ui.fileInput.click();
+  ui.fileInput.addEventListener("change", () => {
+    if (ui.fileInput.files?.[0]) loadFile(ui.fileInput.files[0]);
+  });
+
+  ui.demoBtn.onclick = async () => {
+    // tiny built-in test tone sequence rendered into an AudioBuffer
+    const ac = new AudioContext();
+    const sampleRate = ac.sampleRate;
+    const seconds = 4.5;
+    const buffer = ac.createBuffer(1, Math.floor(sampleRate * seconds), sampleRate);
+    const data = buffer.getChannelData(0);
+    const notes = [261.63, 329.63, 392.00, 523.25];
+    let t = 0;
+    for (const hz of notes) {
+      const start = Math.floor(t * sampleRate);
+      const end = Math.floor((t + 0.8) * sampleRate);
+      for (let i = start; i < end; i++) {
+        const phase = (i - start) / sampleRate;
+        data[i] += Math.sin(2 * Math.PI * hz * phase) * 0.35;
+      }
+      t += 0.9;
+    }
+    state.file = new File([new Blob([])], "demo-tone-sequence.wav", { type: "audio/wav" });
+    state.audioBuffer = buffer;
+    ui.fileName.textContent = state.file.name;
+    ui.fileMeta.textContent = `• ${seconds.toFixed(1)}s demo`;
+    ui.transcribeBtn.disabled = false;
+    state.notes = [];
+    state.midiBytes = null;
+    drawEmpty();
+    setStatus("Demo loaded. Press Transcribe.");
+  };
+
+  async function loadFile(file) {
+    state.file = file;
+    state.audioBuffer = null;
+    state.notes = [];
+    state.midiBytes = null;
+    ui.fileName.textContent = file.name;
+    ui.fileMeta.textContent = `• ${(file.size / 1024 / 1024).toFixed(2)} MB`;
+    ui.transcribeBtn.disabled = false;
+    ui.downloadBtn.disabled = true;
+    ui.copyBtn.disabled = true;
+    setStatus("File loaded. Ready to transcribe.");
+    setProgress(0);
+    drawEmpty();
+  }
+
+  async function decodeAudioFile(file) {
+    const ac = new AudioContext();
+    const arrayBuffer = await file.arrayBuffer();
+    return await ac.decodeAudioData(arrayBuffer.slice(0));
+  }
+
+  // Load the browser Basic Pitch package if available.
+  let basicPitchApi = null;
+  async function loadEngine() {
+    if (basicPitchApi) return basicPitchApi;
+    try {
+      ui.engineLine.textContent = "Engine: loading Basic Pitch browser module…";
+      const mod = await import("https://esm.sh/@spotify/basic-pitch-ts@1.0.1?bundle");
+      basicPitchApi = mod;
+      state.engineReady = true;
+      ui.engineLine.textContent = "Engine: Basic Pitch loaded.";
+      return mod;
+    } catch (err) {
+      state.modelError = err;
+      ui.engineLine.textContent = "Engine: browser module failed to load; fallback mode available.";
+      return null;
+    }
+  }
+
+  ui.transcribeBtn.onclick = async () => {
+    if (state.busy || !state.file) return;
+    state.busy = true;
+    ui.transcribeBtn.disabled = true;
+    ui.downloadBtn.disabled = true;
+    ui.copyBtn.disabled = true;
+    setProgress(2);
+    setStatus("Preparing audio…");
+
+    try {
+      if (!state.audioBuffer) {
+        state.audioBuffer = await decodeAudioFile(state.file);
+      }
+      setProgress(12);
+
+      const engine = await loadEngine();
+      let notes = [];
+
+      if (engine && engine.BasicPitch) {
+        setStatus("Running transcription model… this can take a moment.");
+        notes = await transcribeWithBasicPitch(engine, state.audioBuffer);
+        setProgress(85);
+      } else {
+        setStatus("Using fallback transcriber…");
+        notes = fallbackTranscribe(state.audioBuffer);
+        setProgress(75);
+      }
+
+      notes = cleanNotes(notes);
+      state.notes = notes;
+      state.midiBytes = buildMidi(notes, +ui.tempo.value);
+      renderNotes(notes);
+      drawRoll(notes);
+      ui.downloadBtn.disabled = !notes.length;
+      ui.copyBtn.disabled = !notes.length;
+      setProgress(100);
+      setStatus(`Done. ${notes.length} notes ready.`);
+    } catch (err) {
+      console.error(err);
+      setProgress(0);
+      setStatus(err?.message || "Transcription failed.", "error");
+      ui.noticeBox.className = "notice err";
+      ui.noticeBox.textContent = "If the browser module cannot load, this page still works as a static site, but the transcription quality will drop to the fallback engine.";
+    } finally {
+      state.busy = false;
+      ui.transcribeBtn.disabled = !state.file;
+    }
+  };
+
+  async function transcribeWithBasicPitch(engine, audioBuffer) {
+    const { BasicPitch, noteFramesToTime, addPitchBendsToNoteEvents, outputToNotesPoly, ICASSP_2022_MODEL_PATH } = engine;
+    const audio = toMonoAudioBuffer(audioBuffer);
+    const model = await loadModel(engine, ICASSP_2022_MODEL_PATH);
+    const bp = new BasicPitch(model);
+    const frames = [];
+    const onsets = [];
+    const contours = [];
+    await bp.evaluateModel(
+      audio,
+      (f, o, c) => {
+        if (f?.length) frames.push(...f);
+        if (o?.length) onsets.push(...o);
+        if (c?.length) contours.push(...c);
+      },
+      (p) => setProgress(12 + p * 72)
+    );
+    const opts = {
+      // these map roughly to the library’s note extraction settings
+      onset: clamp(0.15 + (1 - +ui.sens.value) * 0.25, 0.05, 0.5),
+      frame: clamp(0.15 + (1 - +ui.sens.value) * 0.25, 0.05, 0.5),
+      minDurationSec: +ui.minLen.value,
+    };
+    const noteEvents = outputToNotesPoly(frames, onsets, opts.onset, opts.frame, 5);
+    const timed = noteFramesToTime(addPitchBendsToNoteEvents(contours, noteEvents));
+    return timed.map(n => ({
+      pitch: n.note ?? n.pitch ?? n.midi ?? 60,
+      start: n.startTime ?? n.start ?? 0,
+      end: n.endTime ?? n.end ?? 0,
+      velocity: n.velocity ?? 0.85,
+    }));
+  }
+
+  async function loadModel(engine, modelPath) {
+    // Basic Pitch TS model loading differs by build targets; keep this tolerant.
+    if (typeof modelPath === "string") return modelPath;
+    if (modelPath?.url) return modelPath;
+    if (engine?.default?.model) return engine.default.model;
+    return modelPath ?? null;
+  }
+
+  function toMonoAudioBuffer(audioBuffer) {
+    if (audioBuffer.numberOfChannels === 1) return audioBuffer;
+    const ac = new OfflineAudioContext(1, audioBuffer.length, audioBuffer.sampleRate);
+    const src = ac.createBufferSource();
+    src.buffer = audioBuffer;
+    src.connect(ac.destination);
+    src.start();
+    return ac.startRendering();
+  }
+
+  function fallbackTranscribe(audioBuffer) {
+    // Lightweight browser fallback: simple onset + autocorrelation pitch tracker.
+    // Not Songscription-grade, but it works fully in static HTML.
+    const sr = 22050;
+    const mono = resampleMono(audioBuffer, sr);
+    const winSize = 2048;
+    const hop = 256;
+    const minHz = 55, maxHz = 1760;
+    const minLag = Math.floor(sr / maxHz);
+    const maxLag = Math.floor(sr / minHz);
+    const frames = [];
+    let prevEnergy = 0;
+    for (let pos = 0; pos + winSize < mono.length; pos += hop) {
+      const frame = mono.subarray(pos, pos + winSize);
+      let energy = 0;
+      for (let i = 0; i < frame.length; i++) energy += frame[i] * frame[i];
+      const onset = Math.max(0, energy - prevEnergy * 0.94);
+      prevEnergy = energy;
+      if (energy < 0.001) continue;
+      const freq = detectPitch(frame, sr, minLag, maxLag);
+      if (freq) frames.push({ time: pos / sr, freq, onset });
+    }
+    return framesToNotes(frames);
+  }
+
+  function resampleMono(audioBuffer, targetRate) {
+    const src = audioBuffer.numberOfChannels === 1 ? audioBuffer.getChannelData(0) : mixDown(audioBuffer);
+    const ratio = targetRate / audioBuffer.sampleRate;
+    const outLength = Math.max(1, Math.round(src.length * ratio));
+    const out = new Float32Array(outLength);
+    for (let i = 0; i < outLength; i++) {
+      const x = i / ratio;
+      const x0 = Math.floor(x);
+      const x1 = Math.min(src.length - 1, x0 + 1);
+      const t = x - x0;
+      out[i] = src[x0] * (1 - t) + src[x1] * t;
+    }
+    return out;
+  }
+
+  function mixDown(audioBuffer) {
+    const len = audioBuffer.length;
+    const ch = audioBuffer.numberOfChannels;
+    const out = new Float32Array(len);
+    for (let c = 0; c < ch; c++) {
+      const data = audioBuffer.getChannelData(c);
+      for (let i = 0; i < len; i++) out[i] += data[i] / ch;
+    }
+    return out;
+  }
+
+  function detectPitch(frame, sr, minLag, maxLag) {
+    const centered = frame;
+    let bestLag = -1;
+    let best = 0;
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      let corr = 0;
+      for (let i = 0; i < centered.length - lag; i++) corr += centered[i] * centered[i + lag];
+      if (corr > best) { best = corr; bestLag = lag; }
+    }
+    if (bestLag < 0) return null;
+    const conf = best / (energy(frame) + 1e-9);
+    if (conf < 0.07) return null;
+    return sr / bestLag;
+  }
+
+  function energy(a) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * a[i]; return s; }
+
+  function framesToNotes(frames) {
+    const notes = [];
+    let cur = null;
+    const cutoff = +ui.sens.value * 0.25;
+    for (let i = 0; i < frames.length; i++) {
+      const f = frames[i];
+      const midi = hzToMidi(f.freq);
+      const t = f.time;
+      const active = f.onset > cutoff;
+      if (!cur || Math.abs(cur.midi - midi) > 1 || active) {
+        if (cur) cur.end = t;
+        cur = { midi, start: t, end: t + 0.12, velocity: clamp(0.45 + f.onset * 4, 0.2, 1) };
+        notes.push(cur);
+      } else {
+        cur.end = t + 0.12;
+      }
+    }
+    return notes.filter(n => n.end - n.start > +ui.minLen.value);
+  }
+
+  function cleanNotes(notes) {
+    const q = +ui.quant.value;
+    const minLen = +ui.minLen.value;
+    const tempo = +ui.tempo.value;
+    const beat = 60 / tempo;
+    return notes.map(n => ({
+      pitch: clamp(Math.round(n.pitch ?? n.midi), 0, 127),
+      start: Math.max(0, Math.round((n.start ?? 0) / (q * beat)) * q * beat),
+      end: Math.max(0, Math.round((n.end ?? 0) / (q * beat)) * q * beat),
+      velocity: clamp(Math.round((n.velocity ?? 0.85) * 127), 1, 127)
+    })).map(n => {
+      if (n.end <= n.start) n.end = n.start + minLen;
+      if (n.end - n.start < minLen) n.end = n.start + minLen;
+      return n;
+    }).filter(n => n.pitch >= NOTE_MIN && n.pitch <= NOTE_MAX);
+  }
+
+  function hzToMidi(hz) { return Math.round(69 + 12 * Math.log2(hz / 440)); }
+  function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+
+  function buildMidi(notes, tempo) {
+    const ticksPerBeat = 480;
+    const microPerBeat = Math.round(60000000 / tempo);
+    const events = [];
+    notes.forEach((n, idx) => {
+      events.push({ t: secToTicks(n.start), type: 0x90, note: n.pitch, vel: n.velocity || 96, order: idx });
+      events.push({ t: secToTicks(n.end), type: 0x80, note: n.pitch, vel: 0, order: idx });
+    });
+    events.sort((a,b) => a.t - b.t || a.type - b.type || a.order - b.order);
+
+    const track = [];
+    track.push(...metaEvent(0, [0x51, (microPerBeat >> 16) & 255, (microPerBeat >> 8) & 255, microPerBeat & 255]));
+    track.push(...metaEvent(0, [0x58, 4, 2, 24, 8]));
+    track.push(...metaEvent(0, [0x59, 0, 0]));
+    let last = 0;
+    for (const e of events) {
+      const delta = e.t - last;
+      last = e.t;
+      track.push(...varLen(delta), e.type, e.note, e.vel);
+    }
+    track.push(0x00, 0xff, 0x2f, 0x00);
+
+    const trk = new Uint8Array(track);
+    const head = [];
+    pushStr(head, 'MThd');
+    push32(head, 6);
+    push16(head, 0);
+    push16(head, 1);
+    push16(head, ticksPerBeat);
+    pushStr(head, 'MTrk');
+    push32(head, trk.length);
+    return new Uint8Array([...head, ...trk]);
+
+    function secToTicks(sec) { return Math.max(0, Math.round(sec * tempo / 60 * ticksPerBeat)); }
+  }
+
+  function metaEvent(delta, bytes) { return [...varLen(delta), 0xff, ...bytes]; }
+  function varLen(value) {
+    let buffer = value & 0x7f;
+    const bytes = [];
+    while ((value >>= 7)) { buffer <<= 8; buffer |= ((value & 0x7f) | 0x80); }
+    while (true) { bytes.push(buffer & 0xff); if (buffer & 0x80) buffer >>= 8; else break; }
+    return bytes;
+  }
+  function push16(arr, n) { arr.push((n >> 8) & 255, n & 255); }
+  function push32(arr, n) { arr.push((n >> 24) & 255, (n >> 16) & 255, (n >> 8) & 255, n & 255); }
+  function pushStr(arr, s) { for (let i = 0; i < s.length; i++) arr.push(s.charCodeAt(i)); }
+
+  function renderNotes(notes) {
+    const rows = notes.length ? notes.map((n, i) => `<tr><td>${i + 1}</td><td>${n.pitch}</td><td>${n.start.toFixed(3)}</td><td>${n.end.toFixed(3)}</td><td>${(n.end - n.start).toFixed(3)}</td><td>${Math.round(n.velocity)}</td></tr>`).join("") : `<tr><td colspan="6" class="muted-small">No notes found.</td></tr>`;
+    ui.notesBody.innerHTML = rows;
+  }
+
+  function drawEmpty() {
+    ctx.clearRect(0, 0, ui.roll.width, ui.roll.height);
+    ctx.fillStyle = "rgba(255,255,255,.04)";
+    ctx.fillRect(0, 0, ui.roll.width, ui.roll.height);
+    ctx.strokeStyle = "rgba(255,255,255,.05)";
+    for (let p = NOTE_MIN; p <= NOTE_MAX; p++) {
+      const y = pitchToY(p);
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(ui.roll.width, y); ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(255,255,255,.24)";
+    ctx.font = "600 18px Inter, sans-serif";
+    ctx.fillText("Your MIDI preview will appear here.", 28, 40);
+  }
+
+  function pitchToY(p) {
+    const h = ui.roll.height - 30;
+    return 15 + (NOTE_MAX - p) * (h / (NOTE_MAX - NOTE_MIN));
+  }
+
+  function drawRoll(notes) {
+    drawEmpty();
+    if (!notes.length) return;
+    const maxT = Math.max(...notes.map(n => n.end));
+    const minT = 0;
+    const w = ui.roll.width - 40;
+    const h = ui.roll.height - 30;
+    ctx.save();
+    ctx.translate(20, 15);
+    ctx.fillStyle = "rgba(255,255,255,.04)";
+    ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i <= 8; i++) {
+      const x = (w / 8) * i;
+      ctx.strokeStyle = "rgba(255,255,255,.05)";
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let p = NOTE_MIN; p <= NOTE_MAX; p++) {
+      const y = (NOTE_MAX - p) * (h / (NOTE_MAX - NOTE_MIN));
+      ctx.strokeStyle = p % 12 === 0 ? "rgba(255,255,255,.12)" : "rgba(255,255,255,.05)";
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    notes.forEach((n, idx) => {
+      const x = ((n.start - minT) / Math.max(0.001, maxT - minT)) * w;
+      const y = ((NOTE_MAX - n.pitch) / (NOTE_MAX - NOTE_MIN)) * h;
+      const bw = Math.max(4, ((n.end - n.start) / Math.max(0.001, maxT - minT)) * w);
+      const bh = Math.max(8, h / (NOTE_MAX - NOTE_MIN) * 0.78);
+      const grad = ctx.createLinearGradient(x, y, x + bw, y + bh);
+      grad.addColorStop(0, "rgba(124,92,255,.95)");
+      grad.addColorStop(1, "rgba(49,208,170,.95)");
+      ctx.fillStyle = grad;
+      roundRect(ctx, x, y, bw, bh, 6);
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  function roundRect(c, x, y, w, h, r) {
+    const rr = Math.min(r, w/2, h/2);
+    c.beginPath();
+    c.moveTo(x+rr, y);
+    c.arcTo(x+w, y, x+w, y+h, rr);
+    c.arcTo(x+w, y+h, x, y+h, rr);
+    c.arcTo(x, y+h, x, y, rr);
+    c.arcTo(x, y, x+w, y, rr);
+    c.closePath();
+  }
+
+  ui.downloadBtn.onclick = () => {
+    if (!state.midiBytes) return;
+    const blob = new Blob([state.midiBytes], { type: "audio/midi" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = (state.file?.name || "transcription").replace(/\.[^.]+$/, "") + ".mid";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  };
+
+  ui.copyBtn.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(state.notes, null, 2));
+      setStatus("Notes JSON copied to clipboard.");
+    } catch {
+      setStatus("Clipboard access was blocked by the browser.", "error");
+    }
+  };
+
+  ["dragenter", "dragover"].forEach(ev => {
+    ui.dropzone.addEventListener(ev, e => { e.preventDefault(); ui.dropzone.classList.add("dragover"); });
+  });
+  ["dragleave", "drop"].forEach(ev => {
+    ui.dropzone.addEventListener(ev, e => { e.preventDefault(); ui.dropzone.classList.remove("dragover"); });
+  });
+  ui.dropzone.addEventListener("drop", e => {
+    const file = e.dataTransfer?.files?.[0];
+    if (file) loadFile(file);
+  });
+
+  drawEmpty();
+  setStatus("Idle. Pick an audio file to start.");
+  ui.engineLine.textContent = "Engine: waiting.";
+</script>
+</body>
+</html>
